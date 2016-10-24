@@ -1,7 +1,6 @@
 '''Feed-forward neural-net'''
 
-# TODO add InputNeuron class
-# replace NNNeuron class with HiddenNeuron
+# TODO
 # add InputLayer class
 # replace NNLayer with HiddenLayer
 # Just keep it simple and treat it as a single layer neural net
@@ -35,8 +34,6 @@ class FeedForwardNeuralNet(object):
         # set delta on the output
         self.network.output_layer.set_delta()
 
-
-
         for layer in reversed(self.network.hidden_layers):
             for neuron in layer.neurons:
 
@@ -61,31 +58,30 @@ def sigmoid(a):
 
 # nodes
 
-class NNNeuron(object):
-
-    def __init__(self, bias_edge, in_edges, out_edges, output_activation_func=sigmoid):
-        '''takes the bias, sets of input and output edges, as well as the output activation function'''
-        self.bias_edge = bias_edge
+class GraphNode(object):
+    def __init__(self, in_edges, out_edges):
         self.in_edges = in_edges
         self.out_edges = out_edges
-        self.w, self.x = self.get_w_and_x(in_edges)
-        self.output_activation_func = output_activation_func
         self.parents = self.get_parents()
         self.children = self.get_children()
-
-    def input_activation(self):
-        return self.bias_edge.weight + np.dot(self.w, self.x)
-
-    def get_w_and_x(self, in_edges):
-        w_l = [e.weight for e in in_edges]
-        x_l = [e.value for e in in_edges]
-        return np.array(w_l), np.array(x_l)
 
     def get_parents(self):
         return [e.tail for e in self.in_edges]
 
     def get_children(self):
         return [e.head for e in self.out_edges]
+
+class Neuron(GraphNode):
+    def __init__(self, in_edges, out_edges, output_activation_func=sigmoid):
+        GraphNode.__init__(self, in_edges, out_edges)
+        self.w, self.x = self.get_w_and_x(in_edges)
+        self.output_activation_func = output_activation_func
+
+    def get_w_and_x(self, in_edges):
+        # weights are 1 for InputNeurons
+        w_l = [e.weight for e in in_edges]
+        x_l = [e.value for e in in_edges]
+        return np.array(w_l), np.array(x_l)
 
     def output_activation(self):
         '''output value of the neuron'''
@@ -98,33 +94,58 @@ class NNNeuron(object):
         for edge in self.out_edges:
             edge.set_value(output)
 
+    def update_out_weights(self):
+        '''a neuron should be able to update the weights of its output edges'''
+        # TODO
+        for edge in self.out_edges:
+            # calculate delta
+                edge.update_weight()
+
+class InputNeuron(Neuron):
+    def __init__(self, in_edges, out_edges, output_activation_func=sigmoid):
+        Neuron.__init__(self, in_edges, out_edges, output_activation_func)
+
+    # ????? Does input node take a bias term?
+    def input_activation(self):
+
+        return np.dot(self.w, self.x)
+
+    def get_w_and_x(self, in_edges):
+        # override with 1 for weights
+        w_l = [1.0 for e in in_edges]
+        x_l = [e.value for e in in_edges]
+        return np.array(w_l), np.array(x_l)
+
+    def get_parents(self):
+        # override
+        return None
+
+
+class HiddenNeuron(Neuron):
+
+    def __init__(self, bias_edge, in_edges, out_edges, output_activation_func=sigmoid):
+        '''takes the bias, sets of input and output edges, as well as the output activation function'''
+        Neuron.__init__(self, in_edges, out_edges, output_activation_func)
+        # remove this if all nodes take a bias
+        self.bias_edge = bias_edge
+
+    def input_activation(self):
+        return self.bias_edge.weight + np.dot(self.w, self.x)
+
+    # unique to hidden and output neurons
     def set_delta(self):
         output = self.output_activation()
         self.delta = output * (1 - output) *
 
+class OutputNeuron(Neuron):
 
-    def update_out_weights(self):
-        for edge in self.out_edges:
-            # calculate delta
-
-            edge.update_weight()
-
-class OutputNeuron(object):
-
-    def __init__(self, bias_edge, in_edges):
+    def __init__(self, bias_edge, in_edges, out_edges, output_activation_func):
+        Neuron.__init__(self, in_edges, out_edges, output_activation_func)
+        # remove this if all nodes take a bias
         self.bias_edge = bias_edge
-        self.in_edges
 
-    def get_output(self):
-        '''returns an array of probabilities for each class, or perhaps just the
-        class with highest probability'''
-        pass
-        # TODO
-
-    def fire(self):
-        '''compute the output of the neuron'''
-        pass
-        # TODO
+    def input_activation(self):
+        return self.bias_edge.weight + np.dot(self.w, self.x)
 
     def set_delta(self):
         output = self.get_output()
@@ -139,13 +160,18 @@ class GraphEdge(object):
         self.tail = tail
         self.value = value
 
-class BiasEdge(GraphEdge):
-    def __init__(self, head, tail, weight):
-        GraphEdge.__init__(self, head, tail, weight)
-
-class NNEdge(GraphEdge):
+class Synapse(GraphEdge):
     def __init__(self, head, tail, weight, value):
         GraphEdge.__init__(self, head, tail, weight)
+        self.value = value
+
+class BiasEdge(Synapse):
+    def __init__(self, head, tail, weight):
+        Synapse.__init__(self, head, tail, weight, None)
+
+class InputEdge(Synapse):
+    def __init__(self, head, tail, value):
+        Synapse.__init__(self, head, tail, 1.0, value)
 
     def set_value(self, value):
         '''set with the output of self.tail'''
@@ -153,6 +179,14 @@ class NNEdge(GraphEdge):
 
     def update_weight(self):
         # get delta
+
+class HiddenEdge(Synapse):
+    def __init__(self, head, tail, weight, value):
+        Synapse.__init__(self, head, tail, weight, value)
+
+class OutputEdge(Synapse):
+    def __init__(self, head, value):
+        Synapse.__init__(self, head, None, None, value)
 
 # layer
 
