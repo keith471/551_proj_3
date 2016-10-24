@@ -1,4 +1,3 @@
-
 # Basic idea
 
 # Select a training example
