@@ -8,9 +8,15 @@ import numpy as np
 import math
 
 class FeedForwardNeuralNet(object):
-    def __init__(self):
+    def __init__(self, batch_size=1):
         # TODO
         pass
+
+    def fit(self, X, y):
+        # TODO
+
+    def predict(self, X):
+        # TODO
 
     def fprop(self, x):
         # somehow feed x into the input layer
@@ -71,6 +77,9 @@ def input(b, w, x):
 # output
 def sigmoid(a):
     return 1 / (1 + math.exp(-a))
+
+def tanh(a):
+    return (math.exp(a) - math.exp(-a)) / (math.exp(a) + math.exp(-a))
 
 ################################################################################
 # network components
