@@ -34,22 +34,25 @@ def rand_list(size):
 def rand_matrix(rows, cols):
     return (np.random.rand(rows, cols) * 2 - 1) / 100
 
-def sigmoid(a):
-    return 1 / (1 + math.exp(-a))
-
-def sigmoid_deriv(a):
-    sa = sigmoid(a)
-    return sa * (1 - sa)
-
+'''
 def squared_error_loss(y_i, z_i, activation, activation_deriv):
-    '''computes the partial derivative of the squared-error loss for the input scalar y_i
-    and with respect to the input to the node z_i'''
+    #computes the partial derivative of the squared-error loss for the input scalar y_i
+    #and with respect to the input to the node z_i
     return (y_i - activation(z_i)) * (-1 * activation_deriv(z_i))
 
 def cross_entroy_loss(y_i, z_i, activation, activation_deriv):
-    '''computes the partial derivative of the cross-entropy loss for the input scalar y_i
-    and with respect to the input to the node z_i'''
+    #computes the partial derivative of the cross-entropy loss for the input scalar y_i
+    #and with respect to the input to the node z_i
     return -1 * (y_i * (1 / activation(z_i)) * activation_deriv(z_i) + (1 - y_i) * (1 / (1 - activation(z_i))) * (-1 * activation_deriv(z_i)))
+'''
+
+def squared_error_loss(y, o, f_prime):
+    return np.multiply(-(y - o), f_prime)
+
+def cross_entropy_loss(y, o, f_prime):
+    y = np.array(y)
+    f_prime = np.array(f_prime)
+    return -1 * (np.multiply(np.multiply(y, 1/o), f_prime) + np.multiply(np.multiply((1 - y), (1/(1 - o))), (-1 * f_prime)))
 
 def squared_error(y, o):
     '''returns the mean squared error between the VECTORS y and o'''
@@ -65,9 +68,22 @@ def cross_entropy(y, o):
         total += y[i] * np.log(o[i]) + (1.0 - y[i]) * np.log(1.0 - o[i])
     return total
 
+class SigmoidActivator(object):
+
+    def activate(self, a):
+        return 1 / (1 + math.exp(-a))
+
+    def deriv(self, a):
+        sa = sigmoid(a)
+        return sa * (1 - sa)
+
+    def deriv_layer(self, o):
+        '''o is the output vector for the layer'''
+        return [o[i] * (1 - o[i]) for i in range(len(o))]
+
 class FeedForwardNeuralNet(object):
 
-    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, activation_func=sigmoid, batch_size=1, verbose=False, max_iterations=1000):
+    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, activator=SigmoidActivator, loss_function=squared_error_loss, batch_size=1, verbose=False, max_iterations=1000):
         '''
         initialize the neural network
             m (int): the number of features
@@ -80,11 +96,11 @@ class FeedForwardNeuralNet(object):
         self.batch_size = batch_size
         self.verbose = verbose
         self.max_iterations = max_iterations
-        self.initialize(m, hidden_layer_sizes, k, activation_func, verbose)
+        self.initialize(m, hidden_layer_sizes, k, activator, loss_function, verbose)
 
-    def initialize(self, m, hidden_layer_sizes, k, activation_func, verbose):
+    def initialize(self, m, hidden_layer_sizes, k, activator, loss_function, verbose):
         '''initializes a network'''
-        self.network = NeuralNet(m, hidden_layer_sizes, k, activation_func, verbose=verbose)
+        self.network = NeuralNet(m, hidden_layer_sizes, k, activator, loss_function, verbose=verbose)
 
     def fprop(self, x, y):
         '''takes a training sample x and computes the activations in the network
@@ -232,6 +248,9 @@ class FeedForwardNeuralNet(object):
 
         if dle[end] > dle[end - 1]:
             self.alpha *= 0.9
+
+        if self.verbose:
+            print('alpha: %.6f' % self.alpha)
 
         return 0
 
@@ -402,7 +421,7 @@ class FeedForwardNeuralNet(object):
 
 class NeuralNet(object):
 
-    def __init__(self, m, hidden_layer_sizes, k, activation_func, verbose=False):
+    def __init__(self, m, hidden_layer_sizes, k, activator, loss_function, verbose=False):
         b = []  # bias terms
         w = []  # weights
         a = []  # outputs
@@ -434,7 +453,8 @@ class NeuralNet(object):
         self.d = d
         self.delta_w = delta_w
         self.delta_b = delta_b
-        self.activation_func = activation_func
+        self.activator = activator()
+        self.loss_function = loss_function
         self.verbose = verbose
 
     def activate(self, x):
@@ -443,20 +463,20 @@ class NeuralNet(object):
         # activation of the first layer is simply x
         self.a[0] = np.array(x)
         # the activation of any given neuron j in layer l is
-        # activation_func(b[l-1][j] + w[l-1][j]*a[l-1]^T)
+        # activator.activate((b[l-1][j] + w[l-1][j]*a[l-1]^T))
         for l in range(1, len(self.a)):
             for j in range(len(self.a[l])):
-                self.a[l][j] = self.activation_func(self.b[l-1][j] + self.w[l-1][j].dot(self.a[l-1]))
+                self.a[l][j] = self.activator.activate((self.b[l-1][j] + self.w[l-1][j].dot(self.a[l-1])))
 
         return self.a[len(self.ls) - 1]
 
+    '''
     def differentiate_layer_output(self, l):
-        '''assumes sigmoid activation'''
+        #assumes sigmoid activation
         # TODO make generic
         return [self.a[l][i]*(1 - self.a[l][i]) for i in range(self.ls[l])]
-
     def compute_deltas(self, y):
-        '''y is a 1-hot vector'''
+        #y is a 1-hot vector
         # for each output unit i in the output layer n, set d[n][i] =
         n = len(self.ls) - 1
         f_prime = self.differentiate_layer_output(n)
@@ -465,6 +485,19 @@ class NeuralNet(object):
         # for each node i in layer l, set d[l][i] =
         for l in reversed(range(1, n)):
             f_prime = self.differentiate_layer_output(l)
+            self.d[l] = np.multiply(self.w[l].T.dot(self.d[l+1].reshape((len(self.d[l+1]),1))).T, f_prime)[0]
+    '''
+
+    def compute_deltas(self, y):
+        '''y is a 1-hot vector'''
+        # output layer
+        n = len(self.ls) - 1
+        f_prime = self.activator.deriv_layer(self.a[n])
+        self.d[n] = self.loss_function(y, self.a[n], f_prime)
+
+        # hidden layers
+        for l in reversed(range(1, n)):
+            f_prime = self.activator.deriv_layer(self.a[l])
             self.d[l] = np.multiply(self.w[l].T.dot(self.d[l+1].reshape((len(self.d[l+1]),1))).T, f_prime)[0]
 
     def compute_partials(self):
@@ -537,9 +570,10 @@ if __name__ == '__main__':
     m = 3
     hidden_layer_sizes = [4,5]
     k = 2
-    alpha = 20.0
+    # alpha = 1 is a good starting point for cross-entropy. Alpha = 20 is a good starting point for squared error
+    alpha = 1.0
     lmda = 0.0
-    FFNN = FeedForwardNeuralNet(m, hidden_layer_sizes, k, alpha, lmda, verbose=True)
+    FFNN = FeedForwardNeuralNet(m, hidden_layer_sizes, k, alpha, lmda, loss_function=cross_entropy_loss, verbose=True)
     FFNN.network.print_network()
     X = [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0]]
     y = [[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0],[0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0],[0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0],[0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
