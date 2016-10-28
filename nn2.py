@@ -127,6 +127,10 @@ class FeedForwardNeuralNet(object):
         loss = 0.0
         for i in range(len(act)):
             loss += squared_error(act[i], pred[i])
+        if self.verbose:
+            print('Example:')
+            print('actual input:\t{0}'.format(act[len(act) - 1]))
+            print('prediction:\t{0}'.format(pred[len(pred) - 1]))
         return loss / len(act)
 
     def get_error(self, act, pred):
@@ -178,43 +182,42 @@ class FeedForwardNeuralNet(object):
 
         # check for continuing divergence
         end = len(tle) - 1
-        if len(tle) < 6:
+        its = 6
+        if len(tle) < its:
             # we need at least six epochs to determine divergence
             pass
         else:
             div = 0
-            prev = dle[end - 5]
-            for i in range(end - 4, end + 1):
+            prev = dle[end - its + 1]
+            for i in range(end - its + 2, end + 1):
                 curr = dle[i]
                 if curr > prev:
                     div += 1
                 prev = curr
-            if div == 5:
-                print('Performance has worsened for the past five iterations despite decreases in alpha. Overfitting has begun.')
-                print('Final values of alpha and lambda: %.3f, %.3f' % (self.alpha, self.lmda))
+            if div == (its - 1):
+                print('Performance has worsened for the past %d iterations despite decreases in alpha. Overfitting has begun.' % its)
+                print('Final values of alpha and lambda: %.5f, %.5f' % (self.alpha, self.lmda))
                 return -1
 
         # check for convergence
-        if len(tle) < 26:
+        its = 26
+        if len(tle) < its:
             # we need at least 26 epochs to determine convergence
             pass
         else:
             conv = 0
-            first = dle[end - 25]
-            for i in range(end - 24, end + 1):
+            first = dle[end - its + 1]
+            for i in range(end - its + 2, end + 1):
                 curr = dle[i]
                 if abs(curr - first) < 0.001:
                     conv += 1
-            if conv == 25:
-                print('Peformance has remained steady for twenty-five iterations despite decreases in alpha. Gradient descent has converged.')
+            if conv == (its - 1):
+                print('Peformance has remained steady for %d iterations. Gradient descent has converged.' % its)
                 print('Final values of alpha and lambda: %.3f, %.3f' % (self.alpha, self.lmda))
                 return 1
 
-        # compare the last two development losses
         if dle[end] > dle[end - 1]:
             self.alpha *= 0.9
-
-        print('alpha %.12f' % self.alpha)
 
         return 0
 
@@ -276,11 +279,11 @@ class FeedForwardNeuralNet(object):
 
                 print()
                 print('training loss\ttraining error')
-                print('%.3f\t%.3f' % (training_loss, training_error))
+                print('%.6f\t%.6f' % (training_loss, training_error))
                 print()
 
                 print('dev loss\tdev error')
-                print('%.3f\t%.3f' % (dev_loss, dev_error))
+                print('%.6f\t%.6f' % (dev_loss, dev_error))
                 print()
 
                 if dev_loss < training_loss:
@@ -300,9 +303,64 @@ class FeedForwardNeuralNet(object):
 
             i += 1
 
-    def tune_alpha_and_lmda(self):
+    def detect_stagnance(self, dle):
+        dle = [v[0] for v in dle]
+        if abs(dle[len(dle) - 2] - dle[len(dle) - 1]) < 0.001:
+            return True
+        return False
+
+    def detect_oscillation(self, dle):
+        dle = [v[0] for v in dle]
+        end = len(dle) - 1
+        its = 8
+        if len(dle) < its:
+            # we better run several epochs before deciding the error is oscillating
+            return False
+        else:
+            count = 0
+            prev = dle[end - 3]
+            curr = dle[end - 2]
+            diff = abs(prev - curr)
+            prev = curr
+            for i in range(end - 1, end + 1):
+                curr = dle[i]
+                if abs(curr - prev) > (0.01 * diff):
+                    count += 1
+            if count == 3:
+                return True
+            return False
+
+    def tune_alpha_and_lmda(self, X, y):
         '''tunes the values of self.alpha and self.lmda'''
-        pass
+        # the goal here is to find a good starting point for alpha and lambda, working
+        # from the initial values given
+        # we will run gradient descent for 50 iterations
+        # if the loss is not moving, we will increase it
+        # if the loss is oscillating we will decrease it
+
+        training_l_and_e = []
+        dev_l_and_e = []
+
+        for i in range(50):
+            X_train, X_dev, y_train, y_dev = train_test_split(X, y, test_size=0.3)
+
+            batches = self.create_batches(X_train, y_train)
+
+            for batch in batches:
+                self.gradient_descent_iteration(batch)
+
+            training_loss, training_error = self.get_performance(X_train, y_train)
+            dev_loss, dev_error = self.get_performance(X_dev, y_dev)
+
+            training_l_and_e.append((training_loss, training_error))
+            dev_l_and_e.append((dev_loss, dev_error))
+
+            if self.detect_oscillation(dev_l_and_e):
+                self.alpha /= 2
+            elif self.detect_stagnance(dev_l_and_e):
+                self.alpha *= 2
+
+            print('alpha: %.5f, lambda: %.5f' % (self.alpha, self.lmda))
 
     def get_max(self, output):
         '''returns the index of the output vector with the largest value'''
@@ -382,7 +440,6 @@ class NeuralNet(object):
         '''assumes sigmoid activation'''
         # TODO make generic
         return [self.a[l][i]*(1 - self.a[l][i]) for i in range(self.ls[l])]
-
 
     def compute_deltas(self, y):
         '''y is a 1-hot vector'''
@@ -466,7 +523,7 @@ if __name__ == '__main__':
     m = 3
     hidden_layer_sizes = [4,5]
     k = 2
-    alpha = 2.0
+    alpha = 20.0
     lmda = 0.0
     FFNN = FeedForwardNeuralNet(m, hidden_layer_sizes, k, alpha, lmda, verbose=True)
     FFNN.network.print_network()
