@@ -1,30 +1,27 @@
 '''Feed-forward neural net implemenation'''
 
-# We can represent the network as a bunch of layers where each layer has
-# a weight matrix w giving the weights of edges leaving that layer
-# an activation vector a giving the output leaving each node
-# a bias vector giving the bias "weights" leaving from that layer and going to the next
-# an activation function which describes how the input is turned into output
-
-# the initial layer and output layers are a little different
-
-# input layer
-# needs an input vector x
-#   then its output vector a is just x
-
-# output layer
-# needs an output vector y
-
-# TODO
-
+# Implemenation notes:
+# This is a very 'mathematical' implementation in the sense that it does
+# not attempt to actually construct a network, but rather represents the
+# network using various vectors and matrices. To be precise, we
+# can represent the network as a bunch of layers where each layer has
+# a weight matrix w giving the weights of edges leaving that layer,
+# an activation vector a giving the output leaving each node,
+# and a bias vector b giving the biases leaving from that layer and going to the next.
+# We note that the output layer has no bias vector (as each bias vector gives the biases
+# for the NEXT layer, and there is no next layer to the output layer). We also note
+# that the output from the first layer, a[0], is simply x (the current example).
 
 from __future__ import print_function
 
 import sys
 import math
+from collections import deque
+from copy import deepcopy
 
 import numpy as np
 from numpy.random import rand
+
 from sklearn.model_selection import train_test_split
 
 ################################################################################
@@ -40,9 +37,23 @@ def rand_matrix(rows, cols):
 def sigmoid(a):
     return 1 / (1 + math.exp(-a))
 
+def squared_error(y, o):
+    '''returns the mean squared error between the vectors y and o'''
+    squared_diffs = [(y[i] - o[i])**2 for i in range(len(y))]
+    sse = reduce(lambda x,y: x+y, squared_diffs, 0.0)
+    mse = sse / len(y)
+    return mse
+
+def cross_entropy(y, o):
+    '''returns the sum of the cross entropy between each element in the vectors y and o'''
+    total = 0.0
+    for i in range(len(y)):
+        total += y[i] * np.log(o[i]) + (1.0 - y[i]) * np.log(1.0 - o[i])
+    return total
+
 class FeedForwardNeuralNet(object):
 
-    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, activation_func=sigmoid, batch_size=1, verbose=False):
+    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, activation_func=sigmoid, batch_size=1, verbose=False, max_iterations=1000):
         '''
         initialize the neural network
             m (int): the number of features
@@ -54,6 +65,7 @@ class FeedForwardNeuralNet(object):
         self.lmda = lmda
         self.batch_size = batch_size
         self.verbose = verbose
+        self.max_iterations = max_iterations
         self.initialize(m, hidden_layer_sizes, k, activation_func, verbose)
 
     def initialize(self, m, hidden_layer_sizes, k, activation_func, verbose):
@@ -64,10 +76,12 @@ class FeedForwardNeuralNet(object):
         '''takes a training sample x and computes the activations in the network
         y is only passed for the sake of comparison'''
         output = self.network.activate(x)
+        '''
         if self.verbose:
-            #print('input:\t {0}'.format(x))
+            print('input:\t {0}'.format(x))
             print('act:\t {0}'.format(y))
             print('out:\t {0}'.format(output))
+        '''
 
     def bprop(self, y):
         self.network.compute_deltas(y)
@@ -83,7 +97,6 @@ class FeedForwardNeuralNet(object):
             x, y = v
             self.fprop(x, y)
             self.bprop(y)
-
         # update the parameters w and b based on the results of the batch
         self.network.update_params(self.alpha, self.lmda, len(batch))
 
@@ -97,69 +110,223 @@ class FeedForwardNeuralNet(object):
             batches[i % num_batches].append((x, y))
         return batches
 
+    def extract_actuals(self, y):
+        '''takes an array 1-hot vectors and returns an array of indices of the 1s'''
+        y_act = []
+        for hot_vec in y:
+            for i, v in enumerate(hot_vec):
+                if v > 0:
+                    y_act.append(i)
+                    break
+        return y_act
+
+    def get_loss(self, act, pred):
+        if len(act) != len(pred):
+            print('ERROR: actual and predictions not of same length')
+            sys.exit(1)
+        loss = 0.0
+        for i in range(len(act)):
+            loss += squared_error(act[i], pred[i])
+        return loss / len(act)
+
+    def get_error(self, act, pred):
+        if len(act) != len(pred):
+            print('ERROR: actual and predictions not of same length')
+            sys.exit(1)
+        incorrect = 0
+        for i in range(len(act)):
+            if act[i] != pred[i]:
+                incorrect += 1
+        return float(incorrect) / len(act)
+
     def get_performance(self, X, y):
         '''
         makes predictions for X and returns the loss and error against y
         '''
-        # TODO implement this
-        # for each output
-        loss = -(y * log(o) + (1-y) * log(1-o))
-        # then implement multiple epochs and see if you can converge
-        pass
+        y_hot = y
+        y_act = self.extract_actuals(y)
+        raw, cleaned = self.predict_raw(X)
 
+        # compare y_hot to raw and y_act to cleaned
+        loss = self.get_loss(y_hot, raw)
+        error = self.get_error(y_act, cleaned)
+
+        return loss, error
+
+    def check_loss(self, tle, dle):
+        '''
+        looks through current and past losses to determine convergence, divergence, or overfitting
+        and makes adjustments to alpha as need be
+        returns
+          1 if convergence
+          -1 if divergence
+          0 if more epochs are required
+        '''
+        # we want to continue as long as development loss is decreasing
+        # if it increases, we divide alpha by two and continue
+        #   if it increases for five consecutive rounds, then we have overfit
+        # if if is steady, we divide alpha by two and continue
+        #   if it remains steady or decreases for five consecutive iterations, then we have converged
+
+        # convert to a more useful form
+        tle = [v[0] for v in tle]
+        dle = [v[0] for v in dle]
+
+        if len(tle) <= 1:
+            # we need to run at least two epochs to be able to check anything
+            return
+
+        # check for continuing divergence
+        end = len(tle) - 1
+        if len(tle) < 6:
+            # we need at least six epochs to determine divergence
+            pass
+        else:
+            div = 0
+            prev = dle[end - 5]
+            for i in range(end - 4, end + 1):
+                curr = dle[i]
+                if curr > prev:
+                    div += 1
+                prev = curr
+            if div == 5:
+                print('Performance has worsened for the past five iterations despite decreases in alpha. Overfitting has begun.')
+                print('Final values of alpha and lambda: %.3f, %.3f' % (self.alpha, self.lmda))
+                return -1
+
+        # check for convergence
+        if len(tle) < 26:
+            # we need at least 26 epochs to determine convergence
+            pass
+        else:
+            conv = 0
+            first = dle[end - 25]
+            for i in range(end - 24, end + 1):
+                curr = dle[i]
+                if abs(curr - first) < 0.001:
+                    conv += 1
+            if conv == 25:
+                print('Peformance has remained steady for twenty-five iterations despite decreases in alpha. Gradient descent has converged.')
+                print('Final values of alpha and lambda: %.3f, %.3f' % (self.alpha, self.lmda))
+                return 1
+
+        # compare the last two development losses
+        if dle[end] > dle[end - 1]:
+            self.alpha *= 0.9
+
+        print('alpha %.12f' % self.alpha)
+
+        return 0
 
     def fit(self, X, y):
         '''
-        - split into X_train, y_train, X_dev, y_dev
-        - for each point in X_train, run forward propagation and backwards propagation, and update
-        delta_w and delta_b
-        - only update the parameters once per batch of points, resetting delta_w and delta_b each time you start a new batch
-        - after having run all the points and done the final update, predict each x in X_train and compare it to y_train
-        to get the training loss
-        - measure the validation loss using X_dev and y_dev
-        - print a warning if validation error is less than training error, but continue
-        - continue until validation error increases two times in a row - you have begun overfitting
-        - use the weights and biases obtained when lowest validation error was achieved (you will need to remember them)
+        fit the model by running forward and backward propagation for multiple epochs
+        stop after convergence or divergence
         '''
-        # should all be done in a loop
+        '''
+        - [x] split into X_train, y_train, X_dev, y_dev
+        - [x] for each point in X_train, run forward propagation and backwards propagation, and update delta_w and delta_b
+        - [x] only update the parameters once per batch of points, resetting delta_w and delta_b each time you start a new batch
+        - [x] after having run all the points and done the final update, predict each x in X_train and compare it to y_train
+        to get the training loss
+        - [x] measure the validation loss using X_dev and y_dev
+        - [x] print a warning if validation error is less than training error, but continue
+        - [x] continue until validation error increases or remains steady five times in a row - you have begun overfitting
+        - [x] use the weights and biases obtained when lowest validation error was achieved (you will need to remember them)
+        '''
 
-        # take a new train test split
-        X_train, X_dev, y_train, y_dev = train_test_split(X, y, test_size=0.3)
+        # training loss and error
+        training_l_and_e = []
 
-        # create batches for X_train and y_train based on self.batch_size
-        batches = self.create_batches(X_train, y_train)
+        # development loss and error
+        dev_l_and_e = []
 
-        for batch in batches:
-            self.gradient_descent_iteration(batch)
+        # keep track of the last six configurations of the network in the event of overfitting
+        # (since we will then have to recover a previous configuration)
+        network_history = deque([])
 
-        training_loss, training_error = get_performance(X_train, y_train)
-        dev_loss, dev_error = get_performance(X_dev, y_dev)
+        i = 0
+        while True:
+            # take a new train test split
+            X_train, X_dev, y_train, y_dev = train_test_split(X, y, test_size=0.3)
 
-        print()
-        print('training loss\ttraining error')
-        print('%.3f\t%.3f' % (training_loss, training_error))
-        print()
+            # create batches for X_train and y_train based on self.batch_size
+            batches = self.create_batches(X_train, y_train)
 
-        print('dev loss\tdev error')
-        print('%.3f\t%.3f' % (dev_loss, dev_error))
-        print()
+            # train the model using gradient descent
+            for batch in batches:
+                self.gradient_descent_iteration(batch)
 
-        if dev_loss < training_loss:
-            print('!' * 40)
-            print('WARNING: dev loss less than training loss')
-            print('_' * 40)
-            print()
+            # save the latest network
+            if len(network_history) == 6:
+                network_history.popleft()
+            network_history.append(deepcopy(self.network))
 
-        print('completed one epoch')
-        print()
+            # evaluate the loss and error
+            training_loss, training_error = self.get_performance(X_train, y_train)
+            dev_loss, dev_error = self.get_performance(X_dev, y_dev)
 
+            training_l_and_e.append((training_loss, training_error))
+            dev_l_and_e.append((dev_loss, dev_error))
+
+            if self.verbose:
+                print('-' * 80)
+                print('Epoch %d' % i)
+                print('_' * 80)
+
+                print()
+                print('training loss\ttraining error')
+                print('%.3f\t%.3f' % (training_loss, training_error))
+                print()
+
+                print('dev loss\tdev error')
+                print('%.3f\t%.3f' % (dev_loss, dev_error))
+                print()
+
+                if dev_loss < training_loss:
+                    print('*' * 50)
+                    print('WARNING: dev loss less than training loss')
+                    print('*' * 50)
+                    print()
+
+            res = self.check_loss(training_l_and_e, dev_l_and_e)
+            if res == 1:
+                # convergence, and can maintain current network
+                break
+            elif res == -1:
+                # divergence; reset network
+                self.network = network_history[0]
+                break
+
+            i += 1
+
+    def tune_alpha_and_lmda(self):
+        '''tunes the values of self.alpha and self.lmda'''
+        pass
+
+    def get_max(self, output):
+        '''returns the index of the output vector with the largest value'''
+        max_i = 0
+        max_v = 0.0
+        for i, v in enumerate(output):
+            if v > max_v:
+                max_v = v
+                max_i = i
+        return max_i
+
+    def predict_raw(self, X):
+        '''returns raw as well as cleaned predictions'''
+        raw = []
+        cleaned = []
+        for sample in X:
+            o = self.network.activate(sample)
+            raw.append(np.copy(o))
+            cleaned.append(self.get_max(o))
+        return raw, cleaned
 
     def predict(self, X):
-        '''simply pass each x through the network using activate to get the output
-        process the output to get the most probable class
-        record in an array
-        return array of the predictions for each x'''
-        pass
+        '''returns cleaned predictions'''
+        return self.predict_raw[X][1]
 
 class NeuralNet(object):
 
@@ -255,8 +422,6 @@ class NeuralNet(object):
 
     def update_params(self, alpha, lmda, batch_size):
         '''batch_size is the number of points in the batch'''
-        print('updating params')
-        print()
         # update the parameters
         for l in range(len(self.ls) - 1):
             self.w[l] -= alpha * ((self.delta_w[l] / batch_size) + (lmda * self.w[l]))
@@ -299,10 +464,10 @@ class NeuralNet(object):
 
 if __name__ == '__main__':
     m = 3
-    hidden_layer_sizes = [4, 5]
+    hidden_layer_sizes = [4,5]
     k = 2
-    alpha = 2
-    lmda = 0
+    alpha = 2.0
+    lmda = 0.0
     FFNN = FeedForwardNeuralNet(m, hidden_layer_sizes, k, alpha, lmda, verbose=True)
     FFNN.network.print_network()
     X = [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0]]
