@@ -247,7 +247,7 @@ class FeedForwardNeuralNet(object):
                 return 1
 
         if dle[end] > dle[end - 1]:
-            self.alpha *= 0.9
+            self.alpha *= 0.95
 
         if self.verbose:
             print('alpha: %.6f' % self.alpha)
@@ -363,10 +363,10 @@ class FeedForwardNeuralNet(object):
                 return True
             return False
 
-    def tune_alpha_and_lmda(self, X, y):
-        '''tunes the values of self.alpha and self.lmda'''
-        # the goal here is to find a good starting point for alpha and lambda, working
-        # from the initial values given
+    def tune_alpha(self, X, y):
+        '''tunes the starting value of the learning rate'''
+        # the goal here is to find a good starting point for alpha, working
+        # from the initial value given
         # we will run gradient descent for 50 iterations
         # if the loss is not moving, we will increase it
         # if the loss is oscillating we will decrease it
@@ -393,7 +393,7 @@ class FeedForwardNeuralNet(object):
             elif self.detect_stagnance(dev_l_and_e):
                 self.alpha *= 2
 
-            print('alpha: %.5f, lambda: %.5f' % (self.alpha, self.lmda))
+            print('alpha: %.5f' % self.alpha)
 
     def get_max(self, output):
         '''returns the index of the output vector with the largest value'''
@@ -572,7 +572,7 @@ if __name__ == '__main__':
     k = 2
     # alpha = 1 is a good starting point for cross-entropy. Alpha = 20 is a good starting point for squared error
     alpha = 1.0
-    lmda = 0.0
+    lmda = 10e-2
     FFNN = FeedForwardNeuralNet(m, hidden_layer_sizes, k, alpha, lmda, loss_function=cross_entropy_loss, verbose=True)
     FFNN.network.print_network()
     X = [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0]]
