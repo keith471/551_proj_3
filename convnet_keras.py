@@ -99,7 +99,7 @@ if __name__ == '__main__':
     # build the model
     model = get_model(num_classes)
     # Fit the model
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), nb_epoch=10, batch_size=200, verbose=2)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), nb_epoch=9, batch_size=200, verbose=2)
 
     save_model(model, args.model_name)
     # Final evaluation of the model
