@@ -83,7 +83,7 @@ class SigmoidActivator(object):
 
 class FeedForwardNeuralNet(object):
 
-    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, activator=SigmoidActivator, loss_function=squared_error_loss, batch_size=1, verbose=False, max_iterations=1000):
+    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, activator=SigmoidActivator, loss_function=cross_entropy_loss, batch_size=1, verbose=False, max_iterations=1000):
         '''
         initialize the neural network
             m (int): the number of features
@@ -97,6 +97,11 @@ class FeedForwardNeuralNet(object):
         self.verbose = verbose
         self.max_iterations = max_iterations
         self.initialize(m, hidden_layer_sizes, k, activator, loss_function, verbose)
+
+    def pretty_print(self):
+        self.network.pretty_print()
+        print('Alpha:\t%f' % self.alpha)
+        print('Lambda:\t%f' % self.lmda)
 
     def initialize(self, m, hidden_layer_sizes, k, activator, loss_function, verbose):
         '''initializes a network'''
@@ -534,6 +539,15 @@ class NeuralNet(object):
             #self.print_network()
         self.reset_deltas()
 
+    def pretty_print(self):
+        '''prints the general structure of the network'''
+        print('Number of input neurons:\t%d' % self.m)
+        print('Number of hidden layers:\t%d' % (len(self.ls) - 2))
+        for i in range(1, len(self.ls) - 1):
+            print('\tNeurons in layer %d:\t%d' % (i, self.ls[i]))
+        print('Number of output neurons:\t%d' % self.k)
+        print('Activator:\t%s' % str(self.activator).split('(')[0])
+
     def print_element(self, element, rng, offset=0):
         for i in rng:
             print('Layer %d' % (i + offset))
@@ -566,6 +580,7 @@ class NeuralNet(object):
         print('END OF NETWORK')
         print('_' * 80)
 
+'''
 if __name__ == '__main__':
     m = 3
     hidden_layer_sizes = [4,5]
@@ -584,3 +599,4 @@ if __name__ == '__main__':
     print()
     print('predictions')
     print(pred)
+'''

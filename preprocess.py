@@ -10,9 +10,10 @@ def one_hot(y):
         v = np.zeros(19, dtype=int)
         v[s] = 1
         y_hot.append(v)
-    return y_hot
+    return np.array(y_hot)
 
 def default_preprocess(imgs_train, y, imgs_test):
+    '''returns data in desired X_train, y, X_test format'''
     imgs_train, imgs_test = convert_to_bw(imgs_train, imgs_test)
     y = one_hot(y)
     # convert images to feature vectors
@@ -52,7 +53,7 @@ class Preprocessor(object):
             reader.next()
             for row in reader:
                 # row[0] contains the id, row[1] contains the class
-                data.append(row[1])
+                data.append(int(row[1]))
         return data
 
     def read_data(self):
