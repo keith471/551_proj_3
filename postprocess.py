@@ -26,3 +26,22 @@ def post_process(results):
     for i, v in results:
         filename = "%s_%d" % (v[0], i)
         write_results(filename, v[1])
+
+def write_errs_to_csv(train, dev):
+    '''writes training/development loss/error to csv'''
+    fieldnames = ['iter', 'train_loss', 'train_err', 'dev_loss', 'dev_err']
+    # reformat data
+    data = []
+    for i in range(len(train)):
+        row = []
+        row.append(i+1)
+        row.append(train[i][0])
+        row.append(train[i][1])
+        row.append(dev[i][0])
+        row.append(dev[i][1])
+        data.append(row)
+    unique_fname = 'errs_%.f.csv' % time()
+    with open(unique_fname, 'w') as mycsvfile:
+        writer = csv.writer(mycsvfile)
+        writer.writerow(fieldnames)
+        writer.writerows(data)

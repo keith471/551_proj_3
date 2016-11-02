@@ -20,19 +20,34 @@ from collections import deque
 from copy import deepcopy
 
 import numpy as np
+from numpy.random import RandomState
 from numpy.random import rand
 
+from time import time
+
 from sklearn.model_selection import train_test_split
+
+from postprocess import write_errs_to_csv
 
 ################################################################################
 # Helpers
 ################################################################################
 
-def rand_list(size):
-    return np.array(((np.random.rand(1, size) * 2 - 1) / 100)[0])
+def rand_matrix(n_out, n_in):
+    '''returns an np array of size size initialized with random numbers'''
+    rng = RandomState()
+    return rng.uniform(
+        low=-4 * np.sqrt(6. / (n_in + n_out)),
+        high=4 * np.sqrt(6. / (n_in + n_out)),
+        size=(n_out, n_in)
+    )
 
+'''
 def rand_matrix(rows, cols):
+    returns a 2D np array of the specified size initialized with random numbers
+    rng = RandomState()
     return (np.random.rand(rows, cols) * 2 - 1) / 100
+'''
 
 '''
 def squared_error_loss(y_i, z_i, activation, activation_deriv):
@@ -83,7 +98,7 @@ class SigmoidActivator(object):
 
 class FeedForwardNeuralNet(object):
 
-    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, activator=SigmoidActivator, loss_function=cross_entropy_loss, batch_size=1, verbose=False, max_iterations=1000):
+    def __init__(self, m, hidden_layer_sizes, k, alpha, lmda, n_epochs, activator=SigmoidActivator, loss_function=cross_entropy_loss, batch_size=100, verbose=False):
         '''
         initialize the neural network
             m (int): the number of features
@@ -93,9 +108,9 @@ class FeedForwardNeuralNet(object):
         '''
         self.alpha = alpha
         self.lmda = lmda
+        self.n_epochs = n_epochs
         self.batch_size = batch_size
         self.verbose = verbose
-        self.max_iterations = max_iterations
         self.initialize(m, hidden_layer_sizes, k, activator, loss_function, verbose)
 
     def pretty_print(self):
@@ -162,10 +177,12 @@ class FeedForwardNeuralNet(object):
         loss = 0.0
         for i in range(len(act)):
             loss += squared_error(act[i], pred[i])
+        '''
         if self.verbose:
             print('Example:')
             print('actual input:\t{0}'.format(act[len(act) - 1]))
             print('prediction:\t{0}'.format(pred[len(pred) - 1]))
+        '''
         return loss / len(act)
 
     def get_error(self, act, pred):
@@ -260,11 +277,118 @@ class FeedForwardNeuralNet(object):
         return 0
 
     def fit(self, X, y):
-        '''
+
+        # take a train/dev/test split
+        X_rest, X_test, y_rest, y_test = train_test_split(X, y, test_size=0.15)
+        X_train, X_dev, y_train, y_dev = train_test_split(X_rest, y_rest, test_size=0.25)
+
+        # create batches for X_train and y_train based on self.batch_size
+        batches = self.create_batches(X_train, y_train)
+        n_train_batches = len(batches)
+
+        # keep track of training/dev loss and error
+        training_l_and_e = []
+        dev_l_and_e = []
+
+        # early-stopping parameters
+        # look as this many examples regardless
+        patience = 10000
+
+        # wait this much longer when a new best is found
+        patience_increase = 2
+
+        # a relative improvement of this much is considered significant
+        improvement_threshold = 0.995
+
+         # go through this many minibatchs before checking the network on the
+         # validation set; in this case we check every epoch
+        validation_frequency = min(n_train_batches, patience / 2)
+
+        best_validation_loss = np.inf
+        best_iter = 0
+        test_score = 0.
+        start_time = time()
+
+        epoch = 0
+        done_looping = False
+
+        # TODO Better initialization of weights
+
+        while (epoch < self.n_epochs) and (not done_looping):
+            epoch = epoch + 1
+            if self.verbose:
+                print('-' * 80)
+                print('Epoch %d' % epoch)
+                print('_' * 80)
+            # train the model using gradient descent
+            for minibatch_index, batch in enumerate(batches):
+                self.gradient_descent_iteration(batch)
+
+                iter = (epoch - 1) * n_train_batches + minibatch_index
+
+                if (iter + 1) % validation_frequency == 0:
+                    # compute zero-one loss on validation set
+                    training_loss, training_error = self.get_performance(X_train, y_train)
+                    dev_loss, dev_error = self.get_performance(X_dev, y_dev)
+
+                    training_l_and_e.append((training_loss, training_error))
+                    dev_l_and_e.append((dev_loss, dev_error))
+
+                    if self.verbose:
+                        print(
+                            'epoch %i, minibatch %i/%i, validation (dev) error %f %%' %
+                            (
+                                epoch,
+                                minibatch_index + 1,
+                                n_train_batches,
+                                dev_error * 100.
+                            )
+                        )
+                        print()
+                        print('training loss\ttraining error')
+                        print('%.6f\t%.6f' % (training_loss, training_error))
+                        print()
+
+                        print('dev loss\tdev error')
+                        print('%.6f\t%.6f' % (dev_loss, dev_error))
+                        print()
+
+                    # if we got the best validation score until now
+                    if dev_loss < best_validation_loss:
+                        # improve patience if loss improvement is good enough
+                        if dev_loss < (best_validation_loss * improvement_threshold):
+                            patience = max(patience, iter * patience_increase)
+
+                        best_validation_loss = dev_loss
+                        best_iter = iter
+
+                        # test it on the test set
+                        test_loss, test_error = self.get_performance(X_test, y_test)
+
+                        if self.verbose:
+                            print(('     epoch %i, minibatch %i/%i, test error of '
+                                   'best model %f %%') %
+                                  (epoch, minibatch_index + 1, n_train_batches,
+                                   test_error * 100.))
+
+                if patience <= iter:
+                    done_looping = True
+                    break
+
+        # save the training and validation loss/error to disk
+        write_errs_to_csv(training_l_and_e, dev_l_and_e)
+
+        end_time = time()
+        if self.verbose:
+            print(('Optimization complete. Best validation score of %f %% '
+                   'obtained at iteration %i, with test performance %f %%') %
+                  (best_validation_loss * 100., best_iter + 1, test_error * 100.))
+            print('Total training time: %.2fm' % ((end_time - start_time) / 60.))
+
+    '''
+    def fit(self, X, y):
         fit the model by running forward and backward propagation for multiple epochs
         stop after convergence or divergence
-        '''
-        '''
         - [x] split into X_train, y_train, X_dev, y_dev
         - [x] for each point in X_train, run forward propagation and backwards propagation, and update delta_w and delta_b
         - [x] only update the parameters once per batch of points, resetting delta_w and delta_b each time you start a new batch
@@ -274,7 +398,6 @@ class FeedForwardNeuralNet(object):
         - [x] print a warning if validation error is less than training error, but continue
         - [x] continue until validation error increases or remains steady five times in a row - you have begun overfitting
         - [x] use the weights and biases obtained when lowest validation error was achieved (you will need to remember them)
-        '''
 
         # training loss and error
         training_l_and_e = []
@@ -288,6 +411,11 @@ class FeedForwardNeuralNet(object):
 
         i = 0
         while True:
+            if self.verbose:
+                print('-' * 80)
+                print('Epoch %d' % i)
+                print('_' * 80)
+
             # take a new train test split
             X_train, X_dev, y_train, y_dev = train_test_split(X, y, test_size=0.3)
 
@@ -295,7 +423,9 @@ class FeedForwardNeuralNet(object):
             batches = self.create_batches(X_train, y_train)
 
             # train the model using gradient descent
-            for batch in batches:
+            for j, batch in enumerate(batches):
+                if self.verbose:
+                    print('running gradient descent on batch %d' % j)
                 self.gradient_descent_iteration(batch)
 
             # save the latest network
@@ -311,10 +441,6 @@ class FeedForwardNeuralNet(object):
             dev_l_and_e.append((dev_loss, dev_error))
 
             if self.verbose:
-                print('-' * 80)
-                print('Epoch %d' % i)
-                print('_' * 80)
-
                 print()
                 print('training loss\ttraining error')
                 print('%.6f\t%.6f' % (training_loss, training_error))
@@ -340,6 +466,7 @@ class FeedForwardNeuralNet(object):
                 break
 
             i += 1
+    '''
 
     def detect_stagnance(self, dle):
         dle = [v[0] for v in dle]
@@ -394,9 +521,9 @@ class FeedForwardNeuralNet(object):
             dev_l_and_e.append((dev_loss, dev_error))
 
             if self.detect_oscillation(dev_l_and_e):
-                self.alpha /= 2
+                self.alpha /= 2.
             elif self.detect_stagnance(dev_l_and_e):
-                self.alpha *= 2
+                self.alpha *= 2.
 
             print('alpha: %.5f' % self.alpha)
 
@@ -438,16 +565,16 @@ class NeuralNet(object):
         ls = [m] + hidden_layer_sizes + [k]
 
         for i in range(1, len(ls)):
-            b.append(rand_list(ls[i]))
-            delta_b.append(np.zeros((1, ls[i]))[0])
+            b.append(np.zeros((ls[i],)))
+            delta_b.append(np.zeros((ls[i],)))
 
         for j in range(len(ls) - 1):
             w.append(rand_matrix(ls[j+1], ls[j]))
             delta_w.append(np.zeros((ls[j+1], ls[j])))
 
         for v in ls:
-            a.append(np.zeros((1, v))[0])
-            d.append(np.zeros((1, v))[0])
+            a.append(np.zeros((v,)))
+            d.append(np.zeros((v,)))
 
         self.ls = ls
         self.m = m
