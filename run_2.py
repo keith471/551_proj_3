@@ -15,7 +15,6 @@ from argparse import ArgumentParser
 import logging
 
 import sys
-import os.path
 import cPickle as pickle
 from time import time
 
@@ -28,8 +27,7 @@ from keras.datasets import mnist
 from keras.utils import np_utils
 
 from ffnn import FeedForwardNeuralNet as FFNN
-from ffnn import cross_entropy_loss, squared_error_loss
-from preprocess import Preprocessor
+from ffnn import cross_entropy_loss
 from postprocess import to_pickle, write_confusion_matrix_to_csv
 from cross_validation import CrossValidate
 
@@ -96,20 +94,14 @@ def get_data():
     y_train = np_utils.to_categorical(y_train)
     return X_train, y_train, X_test, y_test
 
-def cross_validate(X_train, y_train, clf, rng):
-    '''Return a an array of tuples: (# features used, avg prediction accuracy)'''
-    arr = []
-    accuracy_func = metrics.accuracy_score
-    for num_hidden_neurons in rng:
-
-        X_t = selectChi2Cv(X_train, y_train, numFeats)
-        crossValidator = CrossValidate(X_t, y_train, clf, accuracyFunc)
-        acc = crossValidator.crossValidate()
-        arr.append((numFeats, acc))
-    return arr
-
 def get_opt(x_val_results):
-
+    best_err = 1.0
+    best_num_neurons = 0
+    for num_neurons, train_avgs, test_avgs in x_val_results:
+        if test_avgs[1] < best_err:
+            best_err = test_avgs[1]
+            best_num_neurons = num_neurons
+    return best_num_neurons
 
 if __name__ == '__main__':
 
@@ -172,9 +164,11 @@ if __name__ == '__main__':
     results = []
     print('cross-validating...')
     for num_hidden_neurons in range(200, 700, 50):
+        print('*'*80)
         print('-'*80)
         print('Hidden neurons: %d' % num_hidden_neurons)
         print('_'*80)
+        print('*'*80)
         # create a model with this many neurons
         hidden_layer_sizes = [num_hidden_neurons]
 
@@ -182,7 +176,7 @@ if __name__ == '__main__':
         ffnn.pretty_print()
 
         # cross validate the model to get average errs and losses
-        cross_validator = CrossValidate(X_train, y_train, ffnn)
+        cross_validator = CrossValidate(X_train, y_train, ffnn, cv=3)
         t0 = time()
         train_avgs, test_avgs = cross_validator.cross_validate()
         print('done x-validating for %d hidden neurons in %fs' % (num_hidden_neurons, (time() - t0)))

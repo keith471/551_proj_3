@@ -309,6 +309,7 @@ class FeedForwardNeuralNet(object):
         validation_frequency = min(n_train_batches, patience / 2)
 
         best_validation_loss = np.inf
+        best_validation_err = np.inf
         best_iter = 0
         test_score = 0.
         start_time = time()
@@ -318,9 +319,9 @@ class FeedForwardNeuralNet(object):
         while (epoch < self.n_epochs) and (not done_looping):
             epoch = epoch + 1
             if self.verbose:
-                print('-' * 80)
+                print('-' * 30)
                 print('Epoch %d' % epoch)
-                print('_' * 80)
+                print('_' * 30)
             # train the model using gradient descent
             for minibatch_index, batch in enumerate(batches):
                 self.gradient_descent_iteration(batch)
@@ -355,12 +356,13 @@ class FeedForwardNeuralNet(object):
                         print()
 
                     # if we got the best validation score until now
-                    if dev_loss < best_validation_loss:
+                    if dev_error < best_validation_err:
                         # improve patience if loss improvement is good enough
-                        if dev_loss < (best_validation_loss * improvement_threshold):
+                        if dev_error < (best_validation_err * improvement_threshold):
                             patience = max(patience, iter * patience_increase)
 
                         best_validation_loss = dev_loss
+                        best_validation_err = dev_error
                         best_iter = iter
 
                         # test it on the test set
@@ -388,9 +390,17 @@ class FeedForwardNeuralNet(object):
 
         end_time = time()
         if self.verbose:
-            print(('Optimization complete. Best validation score of %f %% '
-                   'obtained at iteration %i, with test performance %f %%') %
-                  (best_validation_loss * 100., best_iter + 1, test_error * 100.))
+            print('-' * 40)
+            print('Optimization complete')
+            print('_' * 40)
+            if use_test_set:
+                print(('Best validation score of %f %% '
+                       'obtained at iteration %i, with test performance %f %%') %
+                      (best_validation_err * 100., best_iter + 1, test_error * 100.))
+            else:
+                print(('Best validation loss of %f %% '
+                       'obtained at iteration %i') %
+                      (best_validation_err * 100., best_iter + 1))
             print('Total training time: %.2fm' % ((end_time - start_time) / 60.))
 
     '''

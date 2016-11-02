@@ -6,7 +6,6 @@ class DataPartitioner:
     '''
 
     def __init__(self, n, X, y):
-        X = X.toarray()
         self.n = n
         self.partitions = self.partition(n, X, y)
 

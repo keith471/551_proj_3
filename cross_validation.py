@@ -7,28 +7,12 @@ from data_partitioner import DataPartitioner
 
 class CrossValidate:
 
-    def __init__(self, X, y, clf, cv=3):
+    def __init__(self, X, y, clf, cv=10):
         self.X = X
         self.y = y
         self.cv = cv
         self.clf = clf
         self.partitioner = DataPartitioner(cv, X, y)
-
-    print('training the network...')
-    t0 = time()
-    ffnn.fit(X_train, y_train)
-    print('done in %fs' % (time() - t0))
-    print()
-
-    print('making predictions...')
-    t0 = time()
-    pred = ffnn.predict(X_test)
-    print('done in %fs' % (time() - t0))
-    print()
-
-    print('accuracy:')
-    print(metrics.accuracy_score(y_test, pred))
-    print()
 
     def get_avgs(self, l_and_e):
         zipped = zip(*l_and_e)
@@ -36,13 +20,15 @@ class CrossValidate:
         avg_err = sum(zipped[1]) / float(len(zipped[1]))
         return (avg_loss, avg_err)
 
-    def crossValidate(self):
+    def cross_validate(self):
         '''Trains and tests the given classifier on cv folds, and returns the average loss and error
         against the validation set'''
         train_loss_and_err = []
         test_loss_and_err = []
         for i, (X_train, y_train, X_test, y_test) in enumerate(self.partitioner.getPartitions()):
+            print('-' * 60)
             print("Training on training set %d" % i)
+            print('_' * 60)
             t0 = time()
             self.clf.fit(X_train, y_train)
             dur = time() - t0
