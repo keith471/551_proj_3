@@ -18,6 +18,7 @@ import sys
 import math
 from collections import deque
 from copy import deepcopy
+import cPickle as pickle
 
 import numpy as np
 from numpy.random import RandomState
@@ -276,11 +277,14 @@ class FeedForwardNeuralNet(object):
 
         return 0
 
-    def fit(self, X, y):
+    def fit(self, X, y, use_test_set=False, pickle_best=False, write_errs=False):
 
         # take a train/dev/test split
-        X_rest, X_test, y_rest, y_test = train_test_split(X, y, test_size=0.15)
-        X_train, X_dev, y_train, y_dev = train_test_split(X_rest, y_rest, test_size=0.25)
+        if use_test_set:
+            X_rest, X_test, y_rest, y_test = train_test_split(X, y, test_size=0.10)
+            X_train, X_dev, y_train, y_dev = train_test_split(X_rest, y_rest, test_size=0.25)
+        else:
+            X_train, X_dev, y_train, y_dev = train_test_split(X, y, test_size=0.30)
 
         # create batches for X_train and y_train based on self.batch_size
         batches = self.create_batches(X_train, y_train)
@@ -311,9 +315,6 @@ class FeedForwardNeuralNet(object):
 
         epoch = 0
         done_looping = False
-
-        # TODO Better initialization of weights
-
         while (epoch < self.n_epochs) and (not done_looping):
             epoch = epoch + 1
             if self.verbose:
@@ -363,20 +364,27 @@ class FeedForwardNeuralNet(object):
                         best_iter = iter
 
                         # test it on the test set
-                        test_loss, test_error = self.get_performance(X_test, y_test)
+                        if use_test_set:
+                            test_loss, test_error = self.get_performance(X_test, y_test)
 
-                        if self.verbose:
-                            print(('     epoch %i, minibatch %i/%i, test error of '
-                                   'best model %f %%') %
-                                  (epoch, minibatch_index + 1, n_train_batches,
-                                   test_error * 100.))
+                            if self.verbose:
+                                print(('     epoch %i, minibatch %i/%i, test error of '
+                                       'best model %f %%') %
+                                      (epoch, minibatch_index + 1, n_train_batches,
+                                       test_error * 100.))
+
+                        # save the best model
+                        if pickle_best:
+                            with open('best_model.pkl', 'wb') as f:
+                                pickle.dump(self.network, f)
 
                 if patience <= iter:
                     done_looping = True
                     break
 
-        # save the training and validation loss/error to disk
-        write_errs_to_csv(training_l_and_e, dev_l_and_e)
+        # save the training and validation loss/error history to disk
+        if write_errs:
+            write_errs_to_csv(training_l_and_e, dev_l_and_e)
 
         end_time = time()
         if self.verbose:

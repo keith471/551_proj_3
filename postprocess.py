@@ -5,6 +5,8 @@ import csv
 import sys
 from time import time
 
+import cPickle as pickle
+
 def write_to_csv(filename, data, fieldnames):
     ''' writes and array of data to csv with field names fieldNames'''
     # append time to filename to ensure uniqueness
@@ -27,6 +29,11 @@ def post_process(results):
         filename = "%s_%d" % (v[0], i)
         write_results(filename, v[1])
 
+def to_pickle(data, name):
+    name = name + '_%.f.pkl' % time()
+    with open(name, 'wb') as f:
+        pickle.dump(data, f)
+
 def write_errs_to_csv(train, dev):
     '''writes training/development loss/error to csv'''
     fieldnames = ['iter', 'train_loss', 'train_err', 'dev_loss', 'dev_err']
@@ -45,3 +52,9 @@ def write_errs_to_csv(train, dev):
         writer = csv.writer(mycsvfile)
         writer.writerow(fieldnames)
         writer.writerows(data)
+
+def write_confusion_matrix_to_csv(m):
+    unique_fname = 'confusion_matrix_%.f.csv' % time()
+    with open(unique_fname, 'wb') as mycsvfile:
+        writer = csv.writer(mycsvfile)
+        writer.writerows(m)    

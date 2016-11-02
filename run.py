@@ -6,14 +6,12 @@ import logging
 
 import sys
 import os.path
+import cPickle as pickle
+from time import time
 
 from ffnn import FeedForwardNeuralNet as FFNN
 from ffnn import cross_entropy_loss, squared_error_loss
 from preprocess import Preprocessor
-
-import cPickle as pickle
-
-from time import time
 
 #from keras.datasets import mnist
 #from keras.utils import np_utils
@@ -51,20 +49,6 @@ print()
 parser.print_help()
 print()
 
-def get_data():
-    # load data
-    (X_train, y_train), (X_test, y_test) = mnist.load_data()
-    # reshape to be [samples][pixels][width][height]
-    X_train = X_train.reshape(X_train.shape[0], 28*28).astype('float32')
-    X_test = X_test.reshape(X_test.shape[0], 28*28).astype('float32')
-    # normalize inputs from 0-255 to 0-1
-    X_train = X_train / 255
-    X_test = X_test / 255
-    # one hot encode outputs
-    y_train = np_utils.to_categorical(y_train)
-    y_test = np_utils.to_categorical(y_test)
-    return X_train, y_train, X_test, y_test
-
 if __name__ == '__main__':
 
     # load the data
@@ -97,16 +81,6 @@ if __name__ == '__main__':
     print('shape of y:')
     print(y.shape)
 
-    '''
-    X_train = [[1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]]
-    y = [[1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]]
-    X_test = [[0, 1], [1, 0], [1,0], [1,0], [0, 1]]
-    '''
-
-    '''
-    X_train, y, X_test, y_test = get_data()
-    '''
-
     print('initializing a network...')
     t0 = time()
     # define the network structure
@@ -133,6 +107,11 @@ if __name__ == '__main__':
     ffnn.fit(X_train, y)
     print('done in %fs' % (time() - t0))
     print()
+
+    if args.confusion_matrix:
+        print("confusion matrix:")
+        print(metrics.confusion_matrix(y_test, pred))
+        print()
 
     print('making predictions...')
     t0 = time()

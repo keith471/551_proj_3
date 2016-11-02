@@ -4,7 +4,7 @@ from __future__ import print_function
 import numpy as np
 import csv
 from skimage.measure import block_reduce
-#from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 import sys
 '''
 import cPickle as pickle
@@ -44,10 +44,8 @@ def convert_to_bw(imgs_train, imgs_test):
     '''remove backgroud pattern'''
     imgs_train /= 255
     imgs_train[imgs_train < 1.0] = 0.0
-    imgs_train = imgs_train.astype(int)
     imgs_test /= 255
     imgs_test[imgs_test < 1.0] = 0.0
-    imgs_test = imgs_test.astype(int)
     return imgs_train, imgs_test
 
 def pad(imgs):
