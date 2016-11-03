@@ -153,7 +153,10 @@ class FeedForwardNeuralNet(object):
 
     def create_batches(self, X_train, y_train):
         num_batches = len(X_train) / self.batch_size
-        if len(X_train) % num_batches != 0:
+        print(len(X_train))
+        print(self.batch_size)
+        print(num_batches)
+        if num_batches == 0 or len(X_train) % num_batches != 0:
             num_batches += 1
         batches = [[] for i in range(num_batches)]
         for i, x in enumerate(X_train):
@@ -356,8 +359,9 @@ class FeedForwardNeuralNet(object):
                         print()
 
                     # if we got the best validation score until now
-                    if dev_error < best_validation_err:
-                        # improve patience if loss improvement is good enough
+                    if dev_loss < best_validation_loss:
+                        print('achieved new validation best: %f (loss) %f (error)' % (dev_loss, dev_error))
+                        # improve patience if error improvement is good enough
                         if dev_error < (best_validation_err * improvement_threshold):
                             patience = max(patience, iter * patience_increase)
 
@@ -377,6 +381,8 @@ class FeedForwardNeuralNet(object):
 
                         # save the best model
                         if pickle_best:
+                            print('pickling model')
+                            print()
                             with open('best_model.pkl', 'wb') as f:
                                 pickle.dump(self.network, f)
 

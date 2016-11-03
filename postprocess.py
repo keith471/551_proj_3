@@ -57,4 +57,28 @@ def write_confusion_matrix_to_csv(m):
     unique_fname = 'confusion_matrix_%.f.csv' % time()
     with open(unique_fname, 'wb') as mycsvfile:
         writer = csv.writer(mycsvfile)
-        writer.writerows(m)    
+        writer.writerows(m)
+
+def write_cross_val_results_to_csv(results):
+    unique_fname = 'cross_val_results_%.f.csv' % time()
+    fieldnames = ['num_hidden_neurons', 'avg_train_loss', 'avg_train_err', 'avg_test_loss', 'avg_test_err']
+    data = []
+    for num_hidden_neurons, train_avgs, test_avgs in results:
+        row = []
+        row.append(num_hidden_neurons)
+        row.append(train_avgs[0])
+        row.append(train_avgs[1])
+        row.append(test_avgs[0])
+        row.append(test_avgs[1])
+        data.append(row)
+    with open(unique_fname, 'wb') as mycsvfile:
+        writer = csv.writer(mycsvfile)
+        writer.writerow(fieldnames)
+        writer.writerows(data)
+
+def write_to_txt_file(value, name):
+    unique_fname = name + '_%.f.txt' % time()
+    if type(value) != str:
+        value = str(value)
+    with open(unique_fname, 'w') as f:
+        f.write(value)

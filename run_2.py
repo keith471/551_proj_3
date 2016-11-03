@@ -28,7 +28,7 @@ from keras.utils import np_utils
 
 from ffnn import FeedForwardNeuralNet as FFNN
 from ffnn import cross_entropy_loss
-from postprocess import to_pickle, write_confusion_matrix_to_csv
+from postprocess import write_confusion_matrix_to_csv, write_cross_val_results_to_csv, write_to_txt_file
 from cross_validation import CrossValidate
 
 logging.basicConfig(level=logging.INFO,
@@ -158,12 +158,12 @@ if __name__ == '__main__':
 
     alpha = 0.01
     lmda = 0.0001
-    n_epochs = 10
+    n_epochs = 1
 
     # we will want to record the number of hidden neurons, average training error and loss, average testing error and loss
     results = []
     print('cross-validating...')
-    for num_hidden_neurons in range(200, 700, 50):
+    for num_hidden_neurons in range(200, 300, 50):
         print('*'*80)
         print('-'*80)
         print('Hidden neurons: %d' % num_hidden_neurons)
@@ -176,7 +176,7 @@ if __name__ == '__main__':
         ffnn.pretty_print()
 
         # cross validate the model to get average errs and losses
-        cross_validator = CrossValidate(X_train, y_train, ffnn, cv=3)
+        cross_validator = CrossValidate(X_train, y_train, ffnn, cv=2)
         t0 = time()
         train_avgs, test_avgs = cross_validator.cross_validate()
         print('done x-validating for %d hidden neurons in %fs' % (num_hidden_neurons, (time() - t0)))
@@ -192,8 +192,8 @@ if __name__ == '__main__':
     ############################################################################
     # pickle the results for safe keeping
     ############################################################################
-    print('pickling cross-validation results')
-    to_pickle(results, 'cross_val_results')
+    print('writing cross-validation results to csv')
+    write_cross_val_results_to_csv(results)
     print('done')
     print()
 
@@ -204,8 +204,10 @@ if __name__ == '__main__':
     print('best number of hidden neurons: %d' % opt_hidden_neurons)
     print()
 
+    write_to_txt_file(opt_hidden_neurons, 'opt_hidden_neurons')
+
     # we'll want to use more epochs now
-    n_epochs = 100
+    n_epochs = 2
 
     ffnn = FFNN(m, [opt_hidden_neurons], k, alpha, lmda, n_epochs, batch_size=args.batch_size, verbose=True)
     ffnn.pretty_print()
