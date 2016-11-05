@@ -153,9 +153,6 @@ class FeedForwardNeuralNet(object):
 
     def create_batches(self, X_train, y_train):
         num_batches = len(X_train) / self.batch_size
-        print(len(X_train))
-        print(self.batch_size)
-        print(num_batches)
         if num_batches == 0 or len(X_train) % num_batches != 0:
             num_batches += 1
         batches = [[] for i in range(num_batches)]

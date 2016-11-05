@@ -46,6 +46,12 @@ parser.add_argument('--squish', type=int,
 parser.add_argument('--confusion_matrix',
                     action="store_true",
                     help="save a confusion matrix for the results")
+parser.add_argument('--x_val',
+                    action="store_true",
+                    help="if set, cross-validation will be used")
+parser.add_argument('--n_hidden',
+                    type=int,
+                    help="specify the number of hidden nodes to train the final model with")
 
 args = parser.parse_args()
 
@@ -112,10 +118,13 @@ if __name__ == '__main__':
     t0 = time()
     if args.squish:
         print('squishing the images by a factor of %d in each dimension' % args.squish)
-    X_train, y_train, X_test, y_test = get_data()
-    print('loaded %d training images and %d test images' % (len(X_train), len(X_test)))
+    all_X_train, all_y_train, X_test, y_test = get_data()
+    print('loaded %d training images and %d test images' % (len(all_X_train), len(X_test)))
     print('done in %fs' % (time() - t0))
     print()
+
+    X_train = all_X_train
+    y_train = all_y_train
 
     if args.frac:
         percent = (args.frac * 100.0)
@@ -129,6 +138,8 @@ if __name__ == '__main__':
         y_train = y_train[:threshold]
         print()
 
+    print('shape of all of X_train:')
+    print(all_X_train.shape)
     print('shape of X_train:')
     print(X_train.shape)
     print('shape of y_train:')
@@ -158,56 +169,61 @@ if __name__ == '__main__':
 
     alpha = 0.01
     lmda = 0.0001
-    n_epochs = 1
+    n_epochs = 20
 
-    # we will want to record the number of hidden neurons, average training error and loss, average testing error and loss
-    results = []
-    print('cross-validating...')
-    for num_hidden_neurons in range(200, 300, 50):
-        print('*'*80)
-        print('-'*80)
-        print('Hidden neurons: %d' % num_hidden_neurons)
-        print('_'*80)
-        print('*'*80)
-        # create a model with this many neurons
-        hidden_layer_sizes = [num_hidden_neurons]
+    if args.x_val:
+        # we will want to record the number of hidden neurons, average training error and loss, average testing error and loss
+        results = []
+        print('cross-validating...')
+        for num_hidden_neurons in range(200, 900, 50):
+            print('*'*80)
+            print('-'*80)
+            print('Hidden neurons: %d' % num_hidden_neurons)
+            print('_'*80)
+            print('*'*80)
+            # create a model with this many neurons
+            hidden_layer_sizes = [num_hidden_neurons]
 
-        ffnn = FFNN(m, hidden_layer_sizes, k, alpha, lmda, n_epochs, batch_size=args.batch_size, verbose=True)
-        ffnn.pretty_print()
+            ffnn = FFNN(m, hidden_layer_sizes, k, alpha, lmda, n_epochs, batch_size=args.batch_size, verbose=True)
+            ffnn.pretty_print()
 
-        # cross validate the model to get average errs and losses
-        cross_validator = CrossValidate(X_train, y_train, ffnn, cv=2)
-        t0 = time()
-        train_avgs, test_avgs = cross_validator.cross_validate()
-        print('done x-validating for %d hidden neurons in %fs' % (num_hidden_neurons, (time() - t0)))
+            # cross validate the model to get average errs and losses
+            cross_validator = CrossValidate(X_train, y_train, ffnn, cv=3)
+            t0 = time()
+            train_avgs, test_avgs = cross_validator.cross_validate()
+            print('done x-validating for %d hidden neurons in %fs' % (num_hidden_neurons, (time() - t0)))
+            print()
+            results.append((num_hidden_neurons, train_avgs, test_avgs))
+
         print()
-        results.append((num_hidden_neurons, train_avgs, test_avgs))
+        print('-'*80)
+        print('completed cross-validation')
+        print('_'*80)
+        print()
 
-    print()
-    print('-'*80)
-    print('completed cross-validation')
-    print('_'*80)
-    print()
+        ############################################################################
+        # save the results for safe keeping
+        ############################################################################
+        print('writing cross-validation results to csv')
+        write_cross_val_results_to_csv(results)
+        print('done')
+        print()
 
-    ############################################################################
-    # pickle the results for safe keeping
-    ############################################################################
-    print('writing cross-validation results to csv')
-    write_cross_val_results_to_csv(results)
-    print('done')
-    print()
+        ############################################################################
+        # determine the best number of nodes and train a model for that number of nodes and save it
+        ############################################################################
+        opt_hidden_neurons = get_opt(results)
+        print('best number of hidden neurons: %d' % opt_hidden_neurons)
+        print()
 
-    ############################################################################
-    # determine the best number of nodes and train a model for that number of nodes and save it
-    ############################################################################
-    opt_hidden_neurons = get_opt(results)
-    print('best number of hidden neurons: %d' % opt_hidden_neurons)
-    print()
+        write_to_txt_file(opt_hidden_neurons, 'opt_hidden_neurons')
 
-    write_to_txt_file(opt_hidden_neurons, 'opt_hidden_neurons')
-
-    # we'll want to use more epochs now
-    n_epochs = 2
+    if args.n_hidden:
+        opt_hidden_neurons = args.n_hidden
+    # we'll want to use more epochs now and all the original data
+    n_epochs = 50
+    X_train = all_X_train
+    y_train = all_y_train
 
     ffnn = FFNN(m, [opt_hidden_neurons], k, alpha, lmda, n_epochs, batch_size=args.batch_size, verbose=True)
     ffnn.pretty_print()
