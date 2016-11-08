@@ -10,7 +10,7 @@ You can find our feedforward neural network implementation in ffnn.py. To run it
 
 ## Convolutional neural net (using libraries)
 
-The CNN can be ran directly as long as all libraries are installed (numpy, theano or tensorflow, keras, skimage)
+The CNN can be ran directly (kerascnn.py) as long as all libraries are installed (numpy, theano or tensorflow, keras, skimage)
 Name under which to save CNN model can be changed in line 151
 Most recent model is automatically saved, so the process can be stopped at any time.
 Model parameters (lines 33 to 45) may be changed at will.
