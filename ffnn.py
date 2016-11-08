@@ -87,6 +87,10 @@ def cross_entropy(y, o):
 class SigmoidActivator(object):
 
     def activate(self, a):
+        if a > 60:
+            return 1.
+        if a < -60:
+            return 0.
         return 1 / (1 + math.exp(-a))
 
     def deriv(self, a):

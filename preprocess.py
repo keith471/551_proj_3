@@ -32,6 +32,12 @@ print()
 
 # PREPROCESSING HELPERS
 
+def get_imbalance(y):
+    counts = [0 for i in range(0, 20)]
+    for v in y:
+        counts[v] += 1
+    return counts
+
 def one_hot(y):
     y_hot = []
     for s in y:
@@ -68,7 +74,6 @@ def default_preprocess(imgs_train, y, imgs_test, block_size):
     '''returns data in desired X_train, y, X_test format'''
     imgs_train, imgs_test = convert_to_bw(imgs_train, imgs_test)
     if block_size:
-        print('squishing')
         imgs_train = squish(imgs_train, block_size)
         imgs_test = squish(imgs_test, block_size)
         #imgs_train[imgs_train > 0.0] = 1.0
@@ -146,9 +151,10 @@ class Preprocessor(object):
         self.save_pickle(X_test_name, X_test)
         print('saved X_train, y, and X_test as %s, %s, and %s' % (X_train_name, y_name, X_test_name))
 
-'''
 if __name__ == '__main__':
 
     pp = Preprocessor()
-    pp.preprocess((1,2,2))
-'''
+    X_train, y, X_test = pp.read_data()
+    counts = get_imbalance(y)
+    for i, v in enumerate(counts):
+        print('%d\t%d' % (i, v))

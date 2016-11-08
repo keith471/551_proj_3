@@ -12,6 +12,7 @@ from time import time
 from ffnn import FeedForwardNeuralNet as FFNN
 from ffnn import cross_entropy_loss, squared_error_loss
 from preprocess import Preprocessor
+from postprocess import write_results
 
 #from keras.datasets import mnist
 #from keras.utils import np_utils
@@ -57,7 +58,9 @@ if __name__ == '__main__':
     pp = Preprocessor()
     if args.squish:
         print('squishing the images by a factor of %d in each dimension' % args.squish)
-    X_train, y, X_test = pp.preprocess((1, args.squish, args.squish))
+        X_train, y, X_test = pp.preprocess((1, args.squish, args.squish))
+    else:
+        X_train, y, X_test = pp.preprocess()
     print('loaded %d training images and %d test images' % (len(X_train), len(X_test)))
     print('done in %fs' % (time() - t0))
     print()
@@ -87,14 +90,14 @@ if __name__ == '__main__':
     # number of inputs (features)
     m = len(X_train[0])
     # sizes of hidden layers
-    hidden_layer_sizes = [500]
+    hidden_layer_sizes = [550]
     # number of outputs (classes)
     k = len(y[0])
 
     # define alpha (initial learning rate) and lambda (regularization penalty)
-    alpha = 0.01
+    alpha = 0.1
     lmda = 0.0001
-    n_epochs = 500
+    n_epochs = 20
 
     # instantiate the neural net
     ffnn = FFNN(m, hidden_layer_sizes, k, alpha, lmda, n_epochs, batch_size=args.batch_size, verbose=True)
@@ -108,15 +111,10 @@ if __name__ == '__main__':
     print('done in %fs' % (time() - t0))
     print()
 
-    if args.confusion_matrix:
-        print("confusion matrix:")
-        print(metrics.confusion_matrix(y_test, pred))
-        print()
-
     print('making predictions...')
     t0 = time()
     pred = ffnn.predict(X_test)
     print('done in %fs' % (time() - t0))
     print()
 
-    print(pred)
+    write_results(pred)
